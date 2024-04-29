@@ -49,20 +49,49 @@ def Binarization(mask, thres = 0., type = 0):
         mask = np.where(mask > thres, mask, 0.)
     return mask  
 
-def plot(image,grnd_truth, score):
-    plt.subplot(131)
-    plt.imshow(image[0].permute(1,2,0))
-    plt.subplot(132)
-    plt.imshow(grnd_truth.squeeze(0).squeeze(0))
-    plt.xlabel('ground truth')
-    plt.subplot(133)
-    plt.imshow(score)
-    plt.xlabel('predicted')
+def save_figure(image, grnd_truth, score, fig_path: str):
+    fig = plt.figure(figsize=(15, 5))  # You can adjust the figure size to fit your needs
+
+    # Adding subplots
+    ax1 = fig.add_subplot(131)
+    ax1.imshow(image[0].permute(1, 2, 0))  # Assuming 'image' is your image tensor
+    ax1.set_title('Input Image')  # Optionally set a title for the subplot
+
+    ax2 = fig.add_subplot(132)
+    ax2.imshow(grnd_truth.permute(1, 2, 0))
+    ax2.set_title('GT')  # GT stands for Ground Truth
+
+    ax3 = fig.add_subplot(133)
+    im = ax3.imshow(score)
+    ax3.set_title('Pred')  # Pred stands for Prediction
+
+    # Add a colorbar for the last plot
+    fig.colorbar(im, ax=ax3, orientation='vertical')
+
+    # Optionally adjust layout to prevent overlapping
+    plt.tight_layout()
+
+    # Save the figure
+    plt.savefig(fig_path)
+    
+    plt.close(fig)      
+
+    # plt.subplot(131)
+    # plt.imshow(image[0].permute(1,2,0))
+    # plt.subplot(132)
+    # plt.imshow(grnd_truth.squeeze(0).squeeze(0))
+    # plt.xlabel('GT')
+    # plt.subplot(133)
+    # plt.imshow(score)
+    # plt.xlabel('Pred')
     # plt.title('Anomaly score')
     # plt.imshow(score[0].permute(1,2,0), cmap='Reds')
-    plt.colorbar()
-    plt.pause(1) 
-    plt.show()          
+    # plt.colorbar()
+    # plt.pause(1) 
+    # plt.show()
+    
+    # plt.close(fig)    
+
 def binImage(heatmap, thres=0 ):
     _, heatmap_bin = cv2.threshold(heatmap , thres , 255 , cv2.THRESH_BINARY+cv2.THRESH_OTSU)
     # t in the paper

@@ -7,7 +7,7 @@ from torchvision import transforms
 import os
 import matplotlib.pyplot as plt
 import numpy as np
-from skimage.io import imread
+from skimage import io, color
 from collections import OrderedDict
 from itertools import chain
 import random
@@ -43,6 +43,7 @@ def read_files(root,d, product, data_motive = 'train', use_good = True, normal =
                         if (data_motive == 'train'):
                             tr_img_pth = os.path.join(root, d, d_in,i)
                             images = os.listdir(tr_img_pth)
+                            images.sort(key=lambda f: int(''.join(filter(str.isdigit, f))))
                             im_pt[tr_img_pth] = images
                             print(f'total {d_in} images of {i} {d} are: {len(images)}')
                             
@@ -52,16 +53,20 @@ def read_files(root,d, product, data_motive = 'train', use_good = True, normal =
                             elif (use_good == False) and (i != 'good') and normal != True :
                                 tr_img_pth = os.path.join(root, d, d_in,i)
                                 images = os.listdir(tr_img_pth)
+                                images.sort(key=lambda f: int(''.join(filter(str.isdigit, f))))
                                 im_pt[tr_img_pth] = images
                                 print(f'total {d_in} images of {i} {d} are: {len(images)}')
                             elif (use_good == True) and (i == 'good') and (normal== True):
                                 tr_img_pth = os.path.join(root, d, d_in,i)
                                 images = os.listdir(tr_img_pth)
+                                images.sort(key=lambda f: int(''.join(filter(str.isdigit, f))))
                                 im_pt[tr_img_pth] = images
                                 print(f'total {d_in} images of {i} {d} are: {len(images)}') 
                         if (data_motive == 'ground_truth'):
                             tr_img_pth = os.path.join(root, d, d_in,i)
                             images = os.listdir(tr_img_pth)
+                            images.sort(key=lambda f: int(''.join(filter(str.isdigit, f))))
+                            # print(f"gts: {images}")
                             im_pt[tr_img_pth] = images
                             print(f'total {d_in} images of {i} {d} are: {len(images)}')
                 if product == "all":
@@ -70,7 +75,12 @@ def read_files(root,d, product, data_motive = 'train', use_good = True, normal =
                     return im_pt #tr_img_pth, images
                     
 def load_images(path, image_name):
-    return imread(os.path.join(path,image_name))
+    img = io.imread(os.path.join(path,image_name))
+    
+    if len(img.shape) == 3 and img.shape[2] == 4:
+        img = color.rgba2rgb(img)  # Convert to 3 channels if needed
+
+    return img
 
     
 def Test_anom_data(root, product= 'bottle', use_good = False):
@@ -169,7 +179,7 @@ def ran_generator(length, shots=1):
         
         
 class Mvtec:
-    def __init__(self, batch_size,root="D:\\second year\\mvtec_anomaly_detection", product= 'bottle'):
+    def __init__(self, batch_size,root="/home/evry/Desktop/master-degree/repositories/two-stage-coarse-to-fine-image-anomaly-segmentation-and-detection-model/data/images", product= 'bottle'):
         self.root = root
         self.batch = batch_size
         self.product = product
@@ -195,9 +205,17 @@ class Mvtec:
             test_anom_image = torch.stack([T(load_images(j,i)) for j in test_anom_path_images.keys() for i in test_anom_path_images[j]])
             test_normal_image = torch.stack([T(load_images(j,i)) for j in test_norm_path_images.keys() for i in test_norm_path_images[j]])
             
+            T_test = transforms.Compose([
+                transforms.ToPILImage(),
+                transforms.Resize((550,550)),
+                transforms.CenterCrop(512),
+                transforms.ToTensor(),
+                transforms.Grayscale(num_output_channels=1)
+            ])
+            
             train_normal_mask = torch.zeros(train_normal_image.size(0), 1,train_normal_image.size(2), train_normal_image.size(3)  )
-            test_normal_mask = torch.zeros(test_normal_image.size(0), 1,test_normal_image.size(2), test_normal_image.size(3)  )
-            test_anom_mask = torch.stack([Process_mask(T(load_images(j,i))) for j in test_anom_mask_path_images.keys() for i in test_anom_mask_path_images[j]])
+            test_anom_mask = torch.stack([Process_mask(T_test(load_images(j,i))) for j in test_anom_mask_path_images.keys() for i in test_anom_mask_path_images[j]])
+            test_normal_mask = torch.zeros(test_normal_image.size(0), 1, test_normal_image.size(2), test_normal_image.size(3))
             
             train_normal = tuple(zip(train_normal_image, train_normal_mask))
             test_anom = tuple(zip(test_anom_image, test_anom_mask))
@@ -226,7 +244,7 @@ class Mvtec:
             
 if __name__ == "__main__":
     
-    root = "D:\\second year\\mvtec_anomaly_detection"
+    root = "/home/evry/Desktop/master-degree/repositories/two-stage-coarse-to-fine-image-anomaly-segmentation-and-detection-model/data/images"
     # print('======== All Normal Data ============')
     # Train_data(root, 'all')
     # print('======== All Anomaly Data ============')

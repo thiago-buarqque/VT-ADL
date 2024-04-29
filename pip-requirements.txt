@@ -1,0 +1,45 @@
+Brotli @ file:///work/perseverance-python-buildout/croot/brotli-split_1698805593785/work
+certifi @ file:///croot/certifi_1707229174982/work/certifi
+charset-normalizer @ file:///tmp/build/80754af9/charset-normalizer_1630003229654/work
+contourpy==1.2.1
+cycler==0.12.1
+debugpy==1.8.1
+einops==0.8.0
+filelock @ file:///work/perseverance-python-buildout/croot/filelock_1701733993137/work
+fonttools==4.51.0
+idna @ file:///work/perseverance-python-buildout/croot/idna_1698845632828/work
+imageio==2.34.1
+Jinja2 @ file:///work/perseverance-python-buildout/croot/jinja2_1707343043683/work
+joblib==1.4.0
+kiwisolver==1.4.5
+lazy_loader==0.4
+MarkupSafe @ file:///work/perseverance-python-buildout/croot/markupsafe_1707342994941/work
+matplotlib==3.8.4
+mkl-fft @ file:///work/perseverance-python-buildout/croot/mkl_fft_1698845673361/work
+mkl-random @ file:///work/perseverance-python-buildout/croot/mkl_random_1698845720894/work
+mkl-service==2.4.0
+mpmath @ file:///work/perseverance-python-buildout/croot/mpmath_1698864994882/work
+networkx @ file:///work/perseverance-python-buildout/croot/networkx_1698865062738/work
+numpy @ file:///croot/numpy_and_numpy_base_1708638617955/work/dist/numpy-1.26.4-cp312-cp312-linux_x86_64.whl#sha256=1d700f51d8b4fa684d858c9e3b56b1656bc5c82b6b79ff08d4e3b491c430059f
+opencv-python-headless==4.9.0.80
+packaging==24.0
+pillow @ file:///croot/pillow_1707233021655/work
+pyparsing==3.1.2
+PySocks @ file:///work/perseverance-python-buildout/croot/pysocks_1698845478203/work
+python-dateutil==2.9.0.post0
+PyYAML @ file:///work/perseverance-python-buildout/croot/pyyaml_1698849903511/work
+requests @ file:///croot/requests_1707355572290/work
+scikit-image==0.23.2
+scikit-learn==1.4.2
+scipy==1.13.0
+setuptools==68.2.2
+six==1.16.0
+sympy @ file:///croot/sympy_1701397643339/work
+threadpoolctl==3.4.0
+tifffile==2024.4.24
+torch==2.3.0
+torchaudio==2.3.0
+torchvision==0.18.0
+typing_extensions @ file:///croot/typing_extensions_1705619912070/work
+urllib3 @ file:///croot/urllib3_1707770551213/work
+wheel==0.41.2

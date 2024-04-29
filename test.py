@@ -17,21 +17,21 @@ import mdn1
 from VT_AE import VT_AE as ae
 from utility_fun import *
 
-prdt = "cable"
+object = "hazelnut"
 patch_size = 64
 
 ssim_loss = pytorch_ssim.SSIM() # SSIM Loss
 
 #Dataset
-data = mvtech.Mvtec(1,product=prdt)
+data = mvtech.Mvtec(batch_size=1,product=object, root="/home/evry/Desktop/master-degree/repositories/two-stage-coarse-to-fine-image-anomaly-segmentation-and-detection-model/processed_data")
 
 # Model declaration
 model = ae(train=False).cuda()
 G_estimate= mdn1.MDN().cuda()
 
 # Loading weights
-model.load_state_dict(torch.load(f'./saved_model/VT_AE_Mvtech_{prdt}'+'.pt'))
-G_estimate.load_state_dict(torch.load(f'./saved_model/G_estimate_Mvtech_{prdt}'+'.pt'))
+model.load_state_dict(torch.load(f'./saved_model/VT_AE_Mvtech_{object}'+'.pt'))
+G_estimate.load_state_dict(torch.load(f'./saved_model/G_estimate_Mvtech_{object}'+'.pt'))
 
 #put model to eval
 model.eval()
@@ -39,7 +39,7 @@ G_estimate.eval()
 
 
 #### testing #####
-loader = [data.train_loader,data.test_norm_loader,data.test_anom_loader]
+loader = [None,data.test_norm_loader,data.test_anom_loader]
 
 t_loss_norm =[]
 t_loss_anom =[]
@@ -67,38 +67,50 @@ def Thresholding(data_load = loader[1:], upsample = 1, thres_type = 0, fpr_thres
     mask_score_t = []
 
     for data in data_load:
-        for i, j in data:
-            if i.size(1)==1:
-                i = torch.stack([i,i,i]).squeeze(2).permute(1,0,2,3)
-            vector, reconstructions = model(i.cuda())
+        for image, mask in data:
+            if image.shape[1] == 4:
+                image = image[:, :3, :, :]
+                
+            if mask.shape[1] == 4:
+                mask = mask[:, :3, :, :]
+
+            if image.size(1)==1:
+                image = torch.stack([image,image,image]).squeeze(2).permute(1,0,2,3)
+            vector, reconstructions = model(image.cuda())
             pi, mu, sigma = G_estimate(vector)
             
             #Loss calculations
-            loss1 = F.mse_loss(reconstructions,i.cuda(), reduction='mean') #Rec Loss
-            loss2 = -ssim_loss(i.cuda(), reconstructions) #SSIM loss for structural similarity
+            loss1 = F.mse_loss(reconstructions,image.cuda(), reduction='mean') #Rec Loss
+            loss2 = -ssim_loss(image.cuda(), reconstructions) #SSIM loss for structural similarity
             loss3 = mdn1.mdn_loss_function(vector,mu,sigma,pi, test= True) #MDN loss for gaussian approximation
             loss = loss1 + loss2 + loss3.sum()       #Total loss
             norm_loss_t.append(loss3.detach().cpu().numpy())
                 
             if upsample==0 :
                 #Mask patch
-                mask_patch = rearrange(j.squeeze(0).squeeze(0), '(h p1) (w p2) -> (h w) p1 p2', p1 = patch_size, p2 = patch_size)
+                mask_patch = rearrange(mask.squeeze(0).squeeze(0), '(h p1) (w p2) -> (h w) p1 p2', p1 = patch_size, p2 = patch_size)
                 mask_patch_score = Binarization(mask_patch.sum(1).sum(1),0.)
                 mask_score_t.append(mask_patch_score) # Storing all masks
                 norm_score = norm_loss_t[-1]
                 normalised_score_t.append(norm_score)# Storing all patch scores
             elif upsample == 1:
-                mask_score_t.append(j.squeeze(0).squeeze(0).cpu().numpy()) # Storing all masks
+                mask_score_t.append(mask.squeeze(0).squeeze(0).cpu().numpy()) # Storing all masks
                 m = torch.nn.UpsamplingBilinear2d((512,512))
                 norm_score = norm_loss_t[-1].reshape(-1,1,512//patch_size,512//patch_size)
                 score_map = m(torch.tensor(norm_score))
                 score_map = Filter(score_map , type =0) # add normalization here for the testing
-                normalised_score_t.append(score_map) # Storing all score maps               
+                normalised_score_t.append(score_map) # Storing all score maps      
+                
+            # break
                 
                 
+    print(f"scores shape {normalised_score_t[0].shape} size: {len(normalised_score_t)}")
     scores = np.asarray(normalised_score_t).flatten()
+    print(f"masks shape {mask_score_t[0].shape} size: {len(mask_score_t)}")
     masks = np.asarray(mask_score_t).flatten()
-    
+    # 262144 (works)
+    # 28835840(works) 
+    # 102498304 (dont)
     if thres_type == 0 :
         fpr, tpr, _ = roc_curve(masks, scores)
         fp3 = np.where(fpr<=fpr_thres)
@@ -128,34 +140,42 @@ def Patch_Overlap_Score(threshold, data_load = loader[1:], upsample =1):
     score_ta = []
     
 
-    for n,data in enumerate(data_load):
+    for data_loader_idx, data in enumerate(data_load):
         total_loss_all = []
-        for c,(i, j) in enumerate(data):
-            if i.size(1)==1:
-                i = torch.stack([i,i,i]).squeeze(2).permute(1,0,2,3)
-            vector, reconstructions = model(i.cuda())
+        
+        anomaly_data = data_loader_idx == 1
+        
+        images_path = f"./runs/test/images/{object}/{'anomaly' if anomaly_data else 'norm'}"
+        
+        if not os.path.exists(images_path):
+            os.makedirs(images_path)
+        
+        for sample_idx, (image, ground_truth) in enumerate(data):
+            if image.size(1)==1:
+                image = torch.stack([image,image,image]).squeeze(2).permute(1,0,2,3)
+            vector, reconstructions = model(image.cuda())
             pi, mu, sigma = G_estimate(vector)
            
             #Loss calculations
-            loss1 = F.mse_loss(reconstructions,i.cuda(), reduction='mean') #Rec Loss
-            loss2 = -ssim_loss(i.cuda(), reconstructions) #SSIM loss for structural similarity
+            loss1 = F.mse_loss(reconstructions,image.cuda(), reduction='mean') #Rec Loss
+            loss2 = -ssim_loss(image.cuda(), reconstructions) #SSIM loss for structural similarity
             loss3 = mdn1.mdn_loss_function(vector,mu,sigma,pi, test= True) #MDN loss for gaussian approximation
             loss = loss1 -loss2 + loss3.max()       #Total loss
             norm_loss_t.append(loss3.detach().cpu().numpy())
             total_loss_all.append(loss.detach().cpu().numpy())
             
-            if n == 0 :
+            if data_loader_idx == 0 :
                 loss1_tn.append(loss1.detach().cpu().numpy())
                 loss2_tn.append(loss2.detach().cpu().numpy())
                 loss3_tn.append(loss3.sum().detach().cpu().numpy())
-            if n == 1:
+            if data_loader_idx == 1:
                 loss1_ta.append(loss1.detach().cpu().numpy())
                 loss2_ta.append(loss2.detach().cpu().numpy())
                 loss3_ta.append(loss3.sum().detach().cpu().numpy())
                 
             if upsample==0 :
                 #Mask patch
-                mask_patch = rearrange(j.squeeze(0).squeeze(0), '(h p1) (w p2) -> (h w) p1 p2', p1 = patch_size, p2 = patch_size)
+                mask_patch = rearrange(ground_truth.squeeze(0).squeeze(0), '(h p1) (w p2) -> (h w) p1 p2', p1 = patch_size, p2 = patch_size)
                 mask_patch_score = Binarization(mask_patch.sum(1).sum(1),0.)
                 mask_score_t.append(mask_patch_score) # Storing all masks
                 norm_score = Binarization(norm_loss_t[-1], threshold)
@@ -165,7 +185,7 @@ def Patch_Overlap_Score(threshold, data_load = loader[1:], upsample =1):
                 
                 normalised_score_t.append(norm_score)# Storing all patch scores
             elif upsample == 1:
-                mask_score_t.append(j.squeeze(0).squeeze(0).cpu().numpy()) # Storing all masks
+                mask_score_t.append(ground_truth.squeeze(0).squeeze(0).cpu().numpy()) # Storing all masks
                 
                 m = torch.nn.UpsamplingBilinear2d((512,512))
                 norm_score = norm_loss_t[-1].reshape(-1,1,512//patch_size,512//patch_size)
@@ -176,17 +196,19 @@ def Patch_Overlap_Score(threshold, data_load = loader[1:], upsample =1):
                 normalised_score_t.append(score_map) # Storing all score maps
                 
             ## Plotting
-            if c%5 == 0:
-                plot(i,j,score_map[0][0])
-            if n == 0:
+            if sample_idx == 0:
+                print(f"Img shape: {image.shape} gt shape: {ground_truth.shape}, score shape: {score_map[0][0].shape}")
+            save_figure(image,ground_truth[0],score_map[0][0], f"{images_path}/{sample_idx}.png")
+            
+            if data_loader_idx == 0:
                 score_tn.append(score_map.max())
-            if n ==1:
+            if data_loader_idx ==1:
                 score_ta.append(score_map.max())
                 
                 
-        if n == 0 :
+        if data_loader_idx == 0 :
             t_loss_all_normal = total_loss_all
-        if n == 1:
+        if data_loader_idx == 1:
             t_loss_all_anomaly = total_loss_all
         
     ## PRO Score            
