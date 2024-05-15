@@ -3,6 +3,7 @@
 @author: Pankaj Mishra
 """
 
+import math
 import torch
 import mvtech
 import torchvision.utils as utils
@@ -55,7 +56,7 @@ for class_name in args["product"][0].split(","):
     ssim_loss = pytorch_ssim.SSIM() # SSIM Loss
 
     #Dataset
-    data = mvtech.Mvtec(args["batch_size"],product=class_name)
+    data = mvtech.Mvtec(int(args["batch_size"]),product=class_name)
 
     # Model declaration
     model = ae(patch_size=args["patch_size"],train=True).cuda()
@@ -68,14 +69,14 @@ for class_name in args["product"][0].split(","):
 
     #Optimiser Declaration
     optimizer = Adam(list(model.parameters())+list(G_estimate.parameters()), lr=args["learning_rate"], weight_decay=0.0001)
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer,[epochs*0.4,epochs*0.6,epochs*0.8],gamma=0.1, last_epoch=-1)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer,[epochs*0.2,epochs*0.4,epochs*0.6, epochs*0.8],gamma=0.1, last_epoch=-1)
 
     ############## TRAIN #####################
     # torch.autograd.set_detect_anomaly(True) #uncomment if you want to track an error
 
-    print('\nNetwork training started.....')
+    print('\nNetwork training started for {class_name}...')
     for epoch in range(epochs):
-        t_loss = []
+        epoch_losses = []
         
         widgets = [
                     DynamicMessage('epoch'),
@@ -87,6 +88,7 @@ for class_name in args["product"][0].split(","):
             for sample_i, (image, mask) in enumerate(data.train_loader):
                 if image.size(1)==1:
                     image = torch.stack([image,image,image]).squeeze(2).permute(1,0,2,3)
+
                 model.zero_grad()
 
                 # vector,pi, mu, sigma, reconstructions = model(j.cuda())
@@ -100,9 +102,9 @@ for class_name in args["product"][0].split(","):
                 mdn = mdn1.mdn_loss_function(vector,mu,sigma,pi) #MDN loss for gaussian approximation
                 
                 # print(f' loss3  : {loss3.item()}')
-                loss = 5*mse + 0.5*ssim + mdn       #Total loss
+                loss = 5 * mse + 0.5 * ssim + mdn       #Total loss
                 
-                t_loss.append(loss.item())   #storing all batch losses to calculate mean epoch loss
+                epoch_losses.append(loss.item())   #storing all batch losses to calculate mean epoch loss
                 
                 # Tensorboard definitions
                 writer.add_scalar('MSE-loss', mse.item(), epoch)
@@ -121,7 +123,7 @@ for class_name in args["product"][0].split(","):
                 loss.backward()
                 optimizer.step()
                 
-                log = f"{epoch} ({sample_i}/{data.train_loader.__len__()}) Class {class_name} | MSE: {mse:.2f} | SSIM: {ssim:.2f} | MDN: {mdn:.2f} | Losses 'sum'/mean/min: {loss:.2f} / {np.mean(t_loss):.2f} / {minloss:.2f}"
+                log = f"{epoch} ({sample_i}/{data.train_loader.__len__()}) Class {class_name} | MSE: {mse:.2f} | SSIM: {ssim:.2f} | MDN: {mdn:.2f} | Losses 'sum'/mean/min: {loss:.2f} / {np.mean(epoch_losses):.2f} / {minloss:.2f}"
                 
                 progress_bar.update(
                         sample_i,
@@ -131,17 +133,27 @@ for class_name in args["product"][0].split(","):
         
             progress_bar.finish()
 
+        loss_mean = np.mean(epoch_losses)
+
         #Tensorboard definitions for the mean epoch values
+        writer.add_image('Original Image',utils.make_grid(image),epoch,dataformats = 'CHW')
         writer.add_image('Reconstructed Image',utils.make_grid(reconstructions),epoch,dataformats = 'CHW')
-        writer.add_scalar('Mean Epoch loss', np.mean(t_loss), epoch)
-        # print(f'Mean Epoch {i} loss: {np.mean(t_loss)}')
+        writer.add_scalar('Mean Epoch loss', loss_mean, epoch)
+        # print(f'Mean Epoch {i} loss: {loss_mean}')
         # print(f'Min loss epoch: {ep} with min loss: {minloss}')
             
         writer.close()
         
+        if loss_mean is np.nan or loss_mean is math.nan:
+            log = f"Loss mean is nan: {epoch_losses}"
+            
+            logging.info(log)
+            
+            print(log)
+        
         # Saving the best model
-        if np.mean(t_loss) <= minloss:
-            minloss = np.mean(t_loss)
+        if loss_mean <= minloss:
+            minloss = loss_mean
             ep = epoch
             os.makedirs('./saved_model', exist_ok=True)
             torch.save(model.state_dict(), f'./saved_model/VT_AE_Mvtech_{class_name}'+'.pt')
