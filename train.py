@@ -21,12 +21,13 @@ import argparse
 import logging
 from progressbar import Bar, DynamicMessage, ProgressBar, ETA
 from time import gmtime, strftime
+from torchsummary import summary
 
 ## Argparse declaration ##
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-p", "--product", required=True,default = 'hazelnut',help="product from the dataset MvTec or BTAD", action='store', type=str,nargs='+')
-ap.add_argument("-e", "--epochs", required=False, default= 400, help="Number of epochs to train")
+ap.add_argument("-e", "--epochs", required=False, default= 1000, help="Number of epochs to train")
 ap.add_argument("-lr", "--learning_rate", required=False, default= 0.0001, help="learning rate")
 ap.add_argument("-ps","--patch_size", required=False, default=64, help="Patch size of the images")
 ap.add_argument("-b", "--batch_size", required=False, default=16, help= "batch size")
@@ -37,20 +38,20 @@ args = vars(ap.parse_args())
 # prdt = args["product"]
 for class_name in args["product"][0].split(","):   
     # Create logger
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)  # Set the logging level to INFO
+    # logger = logging.getLogger()
+    # logger.setLevel(logging.INFO)  # Set the logging level to INFO
 
     # Create file handler which logs even debug messages
-    fh = logging.FileHandler(f'./logs/{class_name}_{strftime("%Y-%m-%d-%H:%M:%S", gmtime())}.log', mode='w')  # Open in write mode, which will create the file if it does not exist
-    fh.setLevel(logging.INFO)
-    fh.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))  # Include timestamp in the log
+    # fh = logging.FileHandler(f'./logs/{class_name}_{strftime("%Y-%m-%d-%H:%M:%S", gmtime())}.log', mode='w')  # Open in write mode, which will create the file if it does not exist
+    # fh.setLevel(logging.INFO)
+    # fh.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))  # Include timestamp in the log
 
-    # Add file handler to the logger
-    logger.addHandler(fh)
+    # # Add file handler to the logger
+    # logger.addHandler(fh)
     
     writer = SummaryWriter()
 
-    epochs =args["epochs"]
+    epochs = int(args["epochs"])
     minloss = 1e10
     ep =0
     ssim_loss = pytorch_ssim.SSIM() # SSIM Loss
@@ -59,13 +60,15 @@ for class_name in args["product"][0].split(","):
     data = mvtech.Mvtec(int(args["batch_size"]),product=class_name)
 
     # Model declaration
-    model = ae(patch_size=args["patch_size"],train=True).cuda()
+    model = ae(patch_size=int(args["patch_size"]),train=True).cuda()
     G_estimate= mdn1.MDN().cuda()
 
     ### put model to train ## 
     #(The two models are trained as a separate module so that it would be easy to use as an independent module in different scenarios)
     model.train()
     G_estimate.train()
+    
+    # print(summary(model, (1, 512, 512)))
 
     #Optimiser Declaration
     optimizer = Adam(list(model.parameters())+list(G_estimate.parameters()), lr=args["learning_rate"], weight_decay=0.0001)
@@ -129,7 +132,7 @@ for class_name in args["product"][0].split(","):
                         sample_i,
                         epoch=log)
                 
-                logging.info(log)
+                # logging.info(log)
         
             progress_bar.finish()
 
@@ -144,12 +147,13 @@ for class_name in args["product"][0].split(","):
             
         writer.close()
         
-        if loss_mean is np.nan or loss_mean is math.nan:
+        if loss_mean is np.nan or loss_mean is math.nan or str(loss_mean) == 'nan':
             log = f"Loss mean is nan: {epoch_losses}"
             
-            logging.info(log)
+            # logging.info(log)
             
-            print(log)
+            # print(log)
+            break
         
         # Saving the best model
         if loss_mean <= minloss:
